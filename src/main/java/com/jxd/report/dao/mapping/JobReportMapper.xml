@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jxd.report.dao.IJobReportDao">
+    <select id="getReport" resultType="com.jxd.report.model.JobReport">
+        select id,date,reviewStatus FROM job_report
+        where empno = #{userId} and YEAR(date) = YEAR(CURDATE()) AND MONTH(date) = MONTH(CURDATE())
+        order by date
+    </select>
+    <select id="getEveryReport" resultType="map">
+        select e.empno empno,e.ename ename,count(CASE WHEN j.ReviewStatus = '未审核' THEN 1 ELSE NULL END) count from emp e left join job_report j on
+        e.empno = j.empno where e.empno in (
+        <foreach collection="empnos" item="empno" separator="," open="" close="">
+        #{empno}
+        </foreach>
+        )
+        group by e.empno
+    </select>
+    <select id="getCompletedDate" resultType="String">
+        select j.date date from job_report j where empno = #{empno} and (reviewstatus = '已审核' or reviewstatus = '未审核')
+    </select>
+    <select id="getAllReport" resultType="map" parameterType="map">
+        select date,attendance,workload,overtime,pname,e.ename aduitPerson,description,reviewstatus,DATE_FORMAT(aduittime, '%Y-%m-%d %H:%i:%s') as aduittime
+        from job_report j
+        left join emp e on e.empno = j.aduitid
+        left join project p on p.pno = j.pno
+        <where>
+            <if test="true">
+                j.empno = #{map.empno}
+            </if>
+            <if test="map.date != null and map.date != ''">
+                and date = #{map.date}
+            </if>
+            <if test="map.pno != null and map.pno != ''">
+                and j.pno = #{map.pno}
+            </if>
+        </where>
+        order by date
+    </select>
+    <select id="getNewReport" resultType="java.util.Map">
+        select
+            ifnull(SUM(CASE WHEN reviewstatus like '%' '%' THEN 1 ELSE 0 END),0)  AS actuallyReports,
+            ifnull(SUM(CASE WHEN reviewstatus = '已审核' THEN 1 ELSE 0 END),0) AS checkedReports,
+            ifnull(SUM(CASE WHEN reviewstatus = '未审核' THEN 1 ELSE 0 END),0) AS uncheckedReports,
+            ifnull(SUM(CASE WHEN reviewstatus = '已退回' THEN 1 ELSE 0 END),0) AS returnReports
+        FROM
+            job_report j left join emp e on j.empno = e.empno where date = #{date} and deptno = #{deptno};
+    </select>
+    <select id="selectDeptReport" resultType="java.util.Map">
+        select id,jr.empno empno,e.ename ename,d.dname dname,date,attendance,workload,overtime,p.pname pname from job_report jr
+        left join emp e on e.empno = jr.empno
+        left join dept d on d.deptno = e.deptno
+        left join project p on p.pno = jr.pno
+        <where>
+            <if test="true">
+                reviewstatus = '未审核' and d.deptno = #{map.deptno}
+            </if>
+            <if test="map.date != null and map.date != ''">
+                and date = #{map.date}
+            </if>
+            <if test="map.queryparam != null and map.queryparam != ''">
+                and (ename like '%' #{map.queryparam} '%' or jr.empno like '%' #{map.queryparam} '%')
+            </if>
+        </where>
+    </select>
+    <select id="selectDeptAllReport" resultType="map">
+        select e.ename ename,dname,date,DATE_FORMAT(time, '%Y-%m-%d %H:%i:%s') as time,attendance,overtime,pname,reviewstatus,emp.ename aduitname from job_report jr
+        left join emp e on e.empno = jr.empno
+        left join dept d on d.deptno = e.deptno
+        left join project p on p.pno = jr.pno
+        left join emp emp on emp.empno = jr.aduitid
+        <where>
+            <if test="true">
+                e.deptno = #{map.deptno}
+            </if>
+            <if test="map.ename != null and map.ename != ''">
+                and e.ename like '%' #{map.ename} '%'
+            </if>
+            <if test="map.startdate != null and map.startdate != ''">
+                and date &gt;= #{map.startdate}
+            </if>
+            <if test="map.enddate != null and map.enddate != ''">
+                and date &lt;= #{map.enddate}
+            </if>
+        </where>
+        order by date
+    </select>
+    <select id="selectAllByDeptno" resultType="map">
+        SELECT
+            e.empno,
+            e.ename,
+            e.hiredate,
+            d.dNAME dname,
+            IFNULL( GROUP_CONCAT( j.date ), '' ) dates,
+            IFNULL( GROUP_CONCAT( p.pNAME ), '' ) projects
+        FROM
+            emp e
+                LEFT JOIN ( SELECT * FROM job_report ORDER BY date ) j ON j.empno = e.empno
+                LEFT JOIN project p ON p.pno = j.pno
+                LEFT JOIN dept d ON d.deptno = e.deptno
+        <where>
+            <if test="true">
+                e.hiredate IS NOT NULL
+            </if>
+            <if test="true">
+                and e.deptno = #{deptno}
+            </if>
+            <if test="ename!= null and ename != ''">
+                and e.ename like '%' #{ename} '%'
+            </if>
+        </where>
+        GROUP BY
+            e.empno,
+            e.eNAME,
+            e.hiredate,
+            d.dNAME
+    </select>
+</mapper>
